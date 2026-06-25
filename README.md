@@ -27,6 +27,15 @@ Default level is `INFO`, which surfaces per-turn + cumulative token usage, tool-
 
 Type `quit` or `exit` to leave. `Ctrl-C` and `Ctrl-D` also work.
 
+## Tests
+
+```bash
+pip install -e '.[dev]'       # adds pytest, pytest-asyncio, pytest-httpx
+pytest                        # runs the suite from ./tests
+```
+
+Tier 1 coverage today: `tests/test_weather.py` (Open-Meteo geocode + forecast against mocked httpx), `tests/test_config.py` (provider→API-key mapping), `tests/test_agent_tool.py` (the `@agent.tool` wrapper's error-to-string translation). No real network or LLM calls — `pytest-httpx` intercepts httpx and the agent tool tests patch `get_weather` directly. Dummy API keys are seeded in `tests/conftest.py` so `agent.py`'s module-level `Agent(...)` constructor doesn't crash during test collection.
+
 ## Switching the model / provider
 
 The model is chosen via the `MODEL` env var; the provider is whatever comes before the colon. No code change is needed to swap.
