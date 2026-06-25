@@ -84,7 +84,13 @@ you> quit
 
 ## Design decisions
 
-**Pydantic AI over hand-rolled.** The agent loop (model → tool calls → tool results → resume) is short but fiddly across providers. Pydantic AI runs that loop, normalizes tool calls, and dispatches parallel calls automatically. Adding another tool later is one decorated function.
+**LangGraph vs Pydantic AI vs hand-rolled.** Three viable shapes for the agent layer:
+
+- **Hand-rolled** — write the loop yourself (~30–50 lines for one provider). Zero dependencies, you understand every byte. Rejected because multi-provider doubles the work (each provider has a different tool-call/streaming-event shape), and parallel tool dispatch + streaming-event parsing is genuinely fiddly to get right.
+- **LangGraph** — explicit state machine of nodes + edges, with persistent checkpoints, branching, looping, and human-in-the-loop steps. Earns its complexity for multi-agent or multi-step workflows. Rejected because it's overkill here: a lot of concepts (`State`, `Node`, `Edge`, `Checkpointer`) for what is essentially "call one tool, stream the response."
+- **Pydantic AI — chosen.** Runs the agent loop, normalizes tool calls across providers, and dispatches parallel calls automatically. Tools register via `@agent.tool` decorators and type hints become JSON schemas, so adding a tool later is one decorated function. Multi-provider is a one-string change in `MODEL`. Right-sized for "one agent, one or two tools" without locking out future tools.
+
+The pivot point: if this project grew into a multi-agent graph (e.g. a planner + executor + critic loop with shared state), LangGraph would start to look right. For a single agent + a small number of independent tools, Pydantic AI stays the better fit.
 
 **Multi-provider via env var, not abstraction.** Default model is `google:gemini-2.5-flash`. Switching to `openai:gpt-4o` or `anthropic:claude-sonnet-4-6` is `MODEL=openai:gpt-4o` in `.env` plus the corresponding API key — no code change. `config.py` maps each provider prefix to the env var its pydantic-ai provider expects, so the fast-fail message in `__main__.py` always names the right key.
 
