@@ -86,7 +86,8 @@ you> quit
 
 **LangGraph vs Pydantic AI vs hand-rolled.** Three viable shapes for the agent layer:
 
-- **Hand-rolled** — write the loop yourself (~30–50 lines for one provider). Zero dependencies, you understand every byte. Rejected because multi-provider doubles the work (each provider has a different tool-call/streaming-event shape), and parallel tool dispatch + streaming-event parsing is genuinely fiddly to get right.
+- **Hand-rolled** — write the loop manually (~30–50 lines for one provider). Zero dependencies, and have to understand every byte. I think it's better for learning the concept of Agent and if more customized agent is required, and have to handle parallel tool dispatch + streaming-event parsing, it's not ideal for a time limited task.
+
 - **LangGraph** — explicit state machine of nodes + edges, with persistent checkpoints, branching, looping, and human-in-the-loop steps. Earns its complexity for multi-agent or multi-step workflows. Rejected because it's overkill here: a lot of concepts (`State`, `Node`, `Edge`, `Checkpointer`) for what is essentially "call one tool, stream the response."
 - **Pydantic AI — chosen.** Runs the agent loop, normalizes tool calls across providers, and dispatches parallel calls automatically. Tools register via `@agent.tool` decorators and type hints become JSON schemas, so adding a tool later is one decorated function. Multi-provider is a one-string change in `MODEL`. Right-sized for "one agent, one or two tools" without locking out future tools.
 
