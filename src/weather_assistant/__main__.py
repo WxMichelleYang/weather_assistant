@@ -1,9 +1,9 @@
 """Entry point: `python -m weather_assistant` or the `weather-assistant` console script.
 
 The order here matters:
-  1. load .env so GOOGLE_API_KEY is in os.environ
+  1. load .env so MODEL + the provider API key are in os.environ
   2. configure logging to file (so submodules' loggers respect LOG_LEVEL / LOG_FILE)
-  3. fast-fail with a friendly message if the key is still missing
+  3. read MODEL via .config and fast-fail if the required API key is missing
   4. THEN import .cli — that triggers agent.py, which builds the
      pydantic-ai Agent at import time and would crash without the key.
 """
@@ -37,10 +37,13 @@ log.debug(".env loaded; LOG_LEVEL=%s; LOG_FILE=%s",
 # One-time hint to stderr so the user knows where logs are being written.
 print(f"(logs → {log_file})", file=sys.stderr)
 
-if not os.getenv("GOOGLE_API_KEY"):
+from .config import MODEL, required_api_key_for  # noqa: E402  (after load_dotenv)
+
+_required_key = required_api_key_for(MODEL)
+if _required_key and not os.getenv(_required_key):
     print(
-        "error: GOOGLE_API_KEY is not set. Copy .env.example to .env and fill it in,\n"
-        "or export GOOGLE_API_KEY in your shell.",
+        f"error: {_required_key} is not set (required for MODEL={MODEL!r}).\n"
+        f"Copy .env.example to .env and fill it in, or export {_required_key} in your shell.",
         file=sys.stderr,
     )
     sys.exit(1)

@@ -7,11 +7,10 @@ from dataclasses import dataclass
 import httpx
 from pydantic_ai import Agent, RunContext
 
+from .config import MODEL
 from .weather import WeatherError, get_weather
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODEL = "google:gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
     "You are a friendly weather assistant. When the user asks about weather, "
@@ -32,7 +31,7 @@ class Deps:
 
 
 agent: Agent[Deps, str] = Agent(
-    DEFAULT_MODEL,
+    MODEL,
     deps_type=Deps,
     system_prompt=SYSTEM_PROMPT,
 )

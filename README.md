@@ -42,7 +42,7 @@ you> quit
 
 **Pydantic AI over hand-rolled.** The agent loop (model → tool calls → tool results → resume) is short but fiddly across providers. Pydantic AI runs that loop, normalizes tool calls, and dispatches parallel calls automatically. Adding another tool later is one decorated function.
 
-**Multi-provider via model string, not abstraction.** Default model is `google:gemini-2.5-flash`. Switching to `openai:gpt-4o` or `anthropic:claude-sonnet-4-6` is one string change in `agent.py`. No bespoke provider layer to maintain.
+**Multi-provider via env var, not abstraction.** Default model is `google:gemini-2.5-flash`. Switching to `openai:gpt-4o` or `anthropic:claude-sonnet-4-6` is `MODEL=openai:gpt-4o` in `.env` plus the corresponding API key — no code change. `config.py` maps each provider prefix to the env var its pydantic-ai provider expects, so the fast-fail message in `__main__.py` always names the right key.
 
 **Three modules, one job each.** `weather.py` knows Open-Meteo, `agent.py` knows the LLM and the tool, `cli.py` knows the terminal. No layer reaches across.
 
