@@ -43,16 +43,34 @@ def _extract_usage(result) -> tuple[int, int, int]:
     return in_t, out_t, total_t
 
 
+class ProviderUnavailable(Exception):
+    """Wrapper raised by `_run_turn` when the model provider call fails.
+
+    Preserves the original exception via `__cause__` for the log; the REPL
+    prints a friendly one-liner instead of a Pydantic AI / httpx traceback.
+    """
+
+
 async def _run_turn(
     user_text: str,
     deps: Deps,
     history: list[ModelMessage],
 ) -> tuple[list[ModelMessage], tuple[int, int, int]]:
-    async with agent.run_stream(user_text, deps=deps, message_history=history) as result:
-        async for delta in result.stream_text(delta=True):
-            sys.stdout.write(delta)
-            sys.stdout.flush()
-        sys.stdout.write("\n")
+    try:
+        async with agent.run_stream(user_text, deps=deps, message_history=history) as result:
+            async for delta in result.stream_text(delta=True):
+                sys.stdout.write(delta)
+                sys.stdout.flush()
+            sys.stdout.write("\n")
+    except Exception as e:
+        # Any failure escaping run_stream is "the model call didn't work."
+        # Could be: provider 5xx/timeout/rate-limit, auth error, network drop,
+        # unexpected pydantic-ai exception, or a tool exception that the tool
+        # itself didn't catch. Log the full traceback for debugging, then raise
+        # a ProviderUnavailable so `main()` can print a friendly message.
+        logger.error("model call failed: %s: %s", e.__class__.__name__, e, exc_info=True)
+        raise ProviderUnavailable(str(e)) from e
+
     tokens = _extract_usage(result)
     logger.info("turn tokens: in=%d out=%d total=%d", *tokens)
     return result.all_messages(), tokens
@@ -93,9 +111,16 @@ async def main() -> None:
                 session_in += in_t
                 session_out += out_t
                 session_total += tot_t
+            except ProviderUnavailable:
+                # _run_turn already logged the full traceback. Show the user a
+                # friendly one-liner and continue the REPL.
+                print(
+                    "\n[the model is unavailable right now — try again in a moment.]\n",
+                    file=sys.stderr,
+                )
             except Exception as e:
-                # One bad turn shouldn't kill the session.
-                logger.debug("turn failed", exc_info=True)
+                # Safety net for anything else — won't kill the session.
+                logger.error("unexpected turn failure", exc_info=True)
                 print(f"\n[error: {e.__class__.__name__}: {e}]\n", file=sys.stderr)
 
 

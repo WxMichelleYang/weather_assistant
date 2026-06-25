@@ -77,24 +77,20 @@ async def test_get_weather_unknown_city_raises_weather_error(httpx_mock):
             await get_weather("Atlantis", client)
 
 
-async def test_get_weather_geocode_http_error_propagates(httpx_mock):
-    httpx_mock.add_response(status_code=500)
-
-    async with httpx.AsyncClient() as client:
-        with pytest.raises(httpx.HTTPStatusError):
-            await get_weather("London", client)
-
-
-async def test_get_weather_forecast_http_error_propagates(httpx_mock):
-    # Geocode succeeds, forecast fails.
+async def test_get_weather_forecast_4xx_propagates_without_retry(httpx_mock):
+    # Geocode succeeds, forecast returns 404 (non-transient → no retry).
+    # Complements the geocode 4xx and 5xx-exhausted cases below.
     httpx_mock.add_response(
         json={"results": [{"name": "London", "country": "UK", "latitude": 51.5, "longitude": -0.1}]},
     )
-    httpx_mock.add_response(status_code=503)
+    httpx_mock.add_response(status_code=404)
 
     async with httpx.AsyncClient() as client:
         with pytest.raises(httpx.HTTPStatusError):
             await get_weather("London", client)
+
+    # Two requests total: successful geocode + the one failed forecast (no retry).
+    assert len(httpx_mock.get_requests()) == 2
 
 
 async def test_get_weather_missing_country_field(httpx_mock):
@@ -111,3 +107,47 @@ async def test_get_weather_missing_country_field(httpx_mock):
         w = await get_weather("Somewhere", client)
 
     assert w.country == ""
+
+
+# --- Retry behavior ---------------------------------------------------------
+
+async def test_get_weather_retries_on_5xx_and_succeeds(httpx_mock):
+    # First geocode attempt → 503, retry succeeds, then forecast succeeds.
+    httpx_mock.add_response(status_code=503)
+    httpx_mock.add_response(
+        json={"results": [{"name": "London", "country": "UK", "latitude": 51.5, "longitude": -0.1}]},
+    )
+    httpx_mock.add_response(
+        json={"current": {"temperature_2m": 18.0, "wind_speed_10m": 10.0, "weather_code": 3}},
+    )
+
+    async with httpx.AsyncClient() as client:
+        w = await get_weather("London", client)
+
+    assert w.city == "London"
+    # Three requests in total: failed geocode + retried geocode + forecast.
+    assert len(httpx_mock.get_requests()) == 3
+
+
+async def test_get_weather_does_not_retry_on_4xx(httpx_mock):
+    # 404 isn't transient — must not retry. Single request, raises immediately.
+    httpx_mock.add_response(status_code=404)
+
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await get_weather("London", client)
+
+    assert len(httpx_mock.get_requests()) == 1
+
+
+async def test_get_weather_retry_exhausted_raises(httpx_mock):
+    # Both attempts return 500 → raise the HTTPStatusError from the second.
+    httpx_mock.add_response(status_code=500)
+    httpx_mock.add_response(status_code=500)
+
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await get_weather("London", client)
+
+    # Two attempts on geocode; no forecast attempted.
+    assert len(httpx_mock.get_requests()) == 2

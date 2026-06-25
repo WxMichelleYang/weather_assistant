@@ -94,7 +94,11 @@ you> quit
 
 **Token-by-token streaming.** `result.stream_text(delta=True)` yields only new tokens; each one is written and `flush()`ed immediately.
 
-**Errors as tool results, not exceptions.** Bad city names, Open-Meteo 5xx, and network timeouts are returned to the model as `"Error: ..."` strings. The model apologizes and explains instead of the REPL crashing. A top-level `try/except` in the REPL catches anything else so a bad turn never kills the session.
+**Errors as tool results, not exceptions.** Bad city names, Open-Meteo 5xx, and network timeouts are returned to the model as `"Error: ..."` strings. The model apologizes and explains instead of the REPL crashing.
+
+**Single retry on transient HTTP failures.** `weather.py` retries once with 500ms backoff on `TimeoutException`, `ConnectError`, `NetworkError`, or any 5xx response from Open-Meteo. 4xx and other exceptions don't retry (a retry wouldn't help). Catches the vast majority of flaky-network turns silently; a real outage still surfaces as a friendly "Error: weather service unavailable" to the model after the retry budget is exhausted.
+
+**Friendly handling of LLM provider failures.** `_run_turn` wraps the model call in a try/except. If the provider is down / rate-limiting / returning errors, the full traceback goes to the log file and the user sees one line on stderr: `[the model is unavailable right now — try again in a moment.]`. The REPL keeps running. A top-level `try/except` in `main()` catches anything truly unexpected as a safety net.
 
 **Geocode → forecast hidden inside the tool.** Open-Meteo's forecast endpoint needs lat/lon, but the LLM only sees `weather_tool(city: str)`. The two-step is internal to `weather.get_weather`.
 
@@ -107,6 +111,17 @@ you> quit
 - Gemini 2.5 Flash by default (provider-swappable)
 - [Open-Meteo](https://open-meteo.com) — free, no API key
 - `httpx` for HTTP, `python-dotenv` for env loading
+
+## Known issues
+
+**Slow startup (1–3s before the prompt appears).** Most of the wait between running `python -m weather_assistant` and seeing the `you>` prompt is spent importing Pydantic AI and constructing the Agent at module load — Pydantic AI pulls in the relevant provider SDK (`google-genai`, `openai`, or `anthropic`), and the provider client is initialized eagerly. It's not a bug, but it's noticeable. The visible wait *looks* like it happens after the welcome banner because the banner is the last thing printed before the prompt is awaited; in practice the same wait is paid during imports too.
+
+  Mitigations exist but each has a tradeoff:
+  - **Lazy Agent construction** — defer `Agent(...)` until the first turn instead of building it at module load. Shifts the wait from "before the prompt" to "after the first user input," which often *feels* faster but doesn't reduce total time.
+  - **Skip Pydantic AI for a hand-rolled client** — fastest startup, but you lose the multi-provider abstraction and write the agent loop yourself.
+  - **Faster Python startup** — `python -X importtime -m weather_assistant 2>importtime.log` shows the offenders; some can be deferred behind local imports inside functions.
+
+  None are clearly worth it yet for a single-user interactive CLI. Documented here so it's a known cost, not a mystery.
 
 ## Future improvements
 
