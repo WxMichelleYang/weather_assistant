@@ -23,7 +23,7 @@ LOG_LEVEL=DEBUG python -m weather_assistant
 tail -f log/weather_assistant.log     # in another terminal
 ```
 
-`DEBUG` shows every geocode/forecast HTTP round-trip; `INFO` shows tool invocations and session lifecycle; default `WARNING` keeps the log file small.
+Default level is `INFO`, which surfaces per-turn + cumulative token usage, tool-call invocations, and session lifecycle. `DEBUG` adds every geocode/forecast HTTP round-trip; `WARNING` strips everything except actual problems (smaller log file, no operational visibility).
 
 Type `quit` or `exit` to leave. `Ctrl-C` and `Ctrl-D` also work.
 
@@ -102,3 +102,5 @@ you> quit
 ## Future improvements
 
 **Rotating log file.** The current logger uses a plain `FileHandler` in append mode, so `weather_assistant.log` grows without bound. For a long-lived install this should be swapped for `logging.handlers.RotatingFileHandler` (e.g. cap at 5 MB, keep 3 backups) or `TimedRotatingFileHandler` (e.g. roll daily, keep 7 days). One-line change in `__main__.py`'s `basicConfig` block; deferred until the file actually starts growing because the rotation policy is easier to choose once we know the real-world log volume.
+
+**Turn-level tool-call monitor.** Today each `weather_tool` invocation gets its own `INFO` log line, and per-turn + cumulative session token usage are also logged (`turn tokens: in=… out=… total=…` and a final `cumulative tokens` line on exit). What's still missing is *which tools fired together in a turn* and how long the turn took end-to-end. A small upgrade is to emit one structured summary per REPL turn instead of the scattered lines, e.g. `turn user='weather in London and Tokyo?' tools=['weather_tool(London)', 'weather_tool(Tokyo)'] tokens=(in=341 out=87) duration_ms=1834`. Implementation: subscribe to Pydantic AI's stream events (`FunctionToolCallEvent`, `FunctionToolResultEvent`) inside `_run_turn` in `cli.py`, accumulate them, log once at the end of the turn. This gives the data needed to later answer questions like "show me turns where no tool was called when one should have been" — i.e. it's the first step toward a real eval / correctness layer (`tests/evals/` with golden cases, or Logfire integration for a hosted UI). Deferred until there's more than one tool, since routing mistakes only really show up once tools start to overlap.

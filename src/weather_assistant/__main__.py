@@ -25,14 +25,14 @@ log_file = Path(os.getenv("LOG_FILE", str(DEFAULT_LOG_FILE))).resolve()
 log_file.parent.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "WARNING").upper(),
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     filename=str(log_file),
     filemode="a",
 )
 log = logging.getLogger(__name__)
 log.debug(".env loaded; LOG_LEVEL=%s; LOG_FILE=%s",
-          os.getenv("LOG_LEVEL", "WARNING"), log_file)
+          os.getenv("LOG_LEVEL", "INFO"), log_file)
 
 # One-time hint to stderr so the user knows where logs are being written.
 print(f"(logs → {log_file})", file=sys.stderr)
