@@ -27,6 +27,41 @@ tail -f log/weather_assistant.log     # in another terminal
 
 Type `quit` or `exit` to leave. `Ctrl-C` and `Ctrl-D` also work.
 
+## Switching the model / provider
+
+The model is chosen via the `MODEL` env var; the provider is whatever comes before the colon. No code change is needed to swap.
+
+**Example — switch from Gemini to OpenAI's GPT-4o:**
+
+In `.env`:
+
+```
+# was:
+# MODEL=google:gemini-2.5-flash
+# GOOGLE_API_KEY=your-google-ai-studio-key-here
+
+MODEL=openai:gpt-4o
+OPENAI_API_KEY=sk-...your-openai-key-here...
+```
+
+Then run as usual:
+
+```bash
+python -m weather_assistant
+```
+
+You can leave `GOOGLE_API_KEY` in `.env` too — only the key matching the active `MODEL` is read. To switch back, flip the `MODEL` line.
+
+**Other providers:**
+
+| Provider  | `MODEL=` example                  | Env var required    |
+|-----------|-----------------------------------|---------------------|
+| Google    | `google:gemini-2.5-flash`         | `GOOGLE_API_KEY`    |
+| OpenAI    | `openai:gpt-4o` / `gpt-4o-mini`   | `OPENAI_API_KEY`    |
+| Anthropic | `anthropic:claude-sonnet-4-6`     | `ANTHROPIC_API_KEY` |
+
+If you set `MODEL=...` but forget the matching key, `__main__.py` fast-fails with a message naming the exact env var the chosen provider expects.
+
 ## Example
 
 ```
